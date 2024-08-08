@@ -128,9 +128,11 @@
  * Note: convenience macros, need to be undef-ed at the end of the file.
  */
 #if GMX_PTX_ARCH == 370
+#    pragma message("GMX_PTX_ARCH == 370")
 #    define NTHREAD_Z (2)
 #    define MIN_BLOCKS_PER_MP (16)
 #else
+#    pragma message("GMX_PTX_ARCH != 370")
 #    define NTHREAD_Z (1)
 #    define MIN_BLOCKS_PER_MP (16)
 #endif /* GMX_PTX_ARCH == 370 */
@@ -138,25 +140,34 @@
 
 #if GMX_PTX_ARCH >= 350
 /**@}*/
+#    pragma message("GMX_PTX_ARCH >= 350")
 __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP)
 #else
+#    pragma message("GMX_PTX_ARCH < 350")
 __launch_bounds__(THREADS_PER_BLOCK)
 #endif /* GMX_PTX_ARCH >= 350 */
 #ifdef PRUNE_NBL
+#    pragma message("PRUNE_NBL")
 #    ifdef CALC_ENERGIES
+#        pragma message("PRUNE_NBL_CALC_ENERGIES")
         __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _VF_prune_cuda)
 #    else
+#        pragma message("PRUNE_NBL_NO_CALC_ENERGIES")
         __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _F_prune_cuda)
 #    endif /* CALC_ENERGIES */
 #else
+#    pragma message("NO_PRUNE_NBL")
 #    ifdef CALC_ENERGIES
+#        pragma message("NO_PRUNE_NBL_CALC_ENERGIES")
         __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _VF_cuda)
 #    else
+#        pragma message("NO_PRUNE_NBL_NO_CALC_ENERGIES")
         __global__ void NB_KERNEL_FUNC_NAME(nbnxn_kernel, _F_cuda)
 #    endif /* CALC_ENERGIES */
 #endif     /* PRUNE_NBL */
                 (NBAtomDataGpu atdat, NBParamGpu nbparam, Nbnxm::gpu_plist plist, bool bCalcFshift)
 #ifdef FUNCTION_DECLARATION_ONLY
+#   pragma message("FUNCTION_DECLARATION_ONLY")
                         ; /* Only do function declaration, omit the function body. */
 #else
 {
