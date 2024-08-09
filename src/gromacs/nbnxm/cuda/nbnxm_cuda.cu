@@ -75,7 +75,7 @@
 #include "nbnxm_cuda_types.h"
 
 /***** The kernel declarations/definitions come here *****/
-
+#include "nbnxn_cuda.cu"
 
 /* Top-level kernel declaration generation: will generate through multiple
  * inclusion the following flavors for all kernel declarations:
@@ -388,7 +388,9 @@ static inline nbnxn_cu_kfunc_ptr_t select_nbnxn_kernel(enum ElecType           e
         }
         else
         {
-            return nb_kfunc_noener_noprune_ptr[elecTypeIdx][vdwTypeIdx];
+            if (elecTypeIdx == ElecType::EwaldAna && vdwTypeIdx == VdwType::FSwitch)
+                return nbnxn_F_cuda_test_kernel;
+             return nb_kfunc_noener_noprune_ptr[elecTypeIdx][vdwTypeIdx];
         }
     }
 }
