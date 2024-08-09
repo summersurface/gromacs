@@ -1,9 +1,27 @@
+#include "gmxpre.h"
+
 #include "gromacs/gpu_utils/cuda_arch_utils.cuh"
 #include "gromacs/gpu_utils/cuda_kernel_utils.cuh"
+#include "gromacs/gpu_utils/devicebuffer.h"
+#include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/gpu_utils/typecasts.cuh"
+#include "gromacs/gpu_utils/vectype_ops.cuh"
+#include "gromacs/hardware/device_information.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
+#include "gromacs/nbnxm/atomdata.h"
+#include "gromacs/nbnxm/gpu_common.h"
+#include "gromacs/nbnxm/gpu_common_utils.h"
+#include "gromacs/nbnxm/gpu_data_mgmt.h"
+#include "gromacs/nbnxm/gpu_types_common.h"
+#include "gromacs/nbnxm/nbnxm.h"
+#include "gromacs/nbnxm/nbnxm_gpu.h"
+#include "gromacs/nbnxm/pairlist.h"
 #include "gromacs/pbcutil/ishift.h"
+
+#include "nbnxm_cuda.h"
+#include "nbnxm_cuda_kernel_utils.cuh"
+#include "nbnxm_cuda_types.h"
 
 #define NTHREAD_Z (1)
 #define MIN_BLOCKS_PER_MP (16)

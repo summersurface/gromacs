@@ -388,7 +388,7 @@ static inline nbnxn_cu_kfunc_ptr_t select_nbnxn_kernel(enum ElecType           e
         }
         else
         {
-            if (elecTypeIdx == ElecType::EwaldAna && vdwTypeIdx == VdwType::FSwitch)
+            if (elecTypeIdx == 4 && vdwTypeIdx == 3)
                 return nbnxn_F_cuda_test_kernel;
              return nb_kfunc_noener_noprune_ptr[elecTypeIdx][vdwTypeIdx];
         }

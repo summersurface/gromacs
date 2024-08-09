@@ -33,7 +33,8 @@
  */
 #ifndef CUDA_ARCH_UTILS_CUH_
 #define CUDA_ARCH_UTILS_CUH_
-
+#define GET_VALUE(x) #x
+#define STRINGIFY(x) GET_VALUE(x)
 #include "gromacs/utility/basedefinitions.h"
 
 /*! \file
