@@ -50,11 +50,7 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
     unsigned int tidxi = threadIdx.x;
     unsigned int tidxj = threadIdx.y;
     unsigned int tidx  = threadIdx.y * blockDim.x + threadIdx.x;
-#if NTHREAD_Z == 1
     unsigned int tidxz = 0;
-#else
-    unsigned int tidxz = threadIdx.z;
-#endif
     unsigned int bidx = blockIdx.x;
     unsigned int widx = tidx / warp_size; /* warp index */
     int sci, ci, cj, ai, aj, cijPackedBegin, cijPackedEnd;
@@ -84,27 +80,7 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
 
     // Full or partial unroll on Ampere (and later) GPUs is beneficial given the increased L1
     // instruction cache. Tested with CUDA 11-12.
-#if GMX_PTX_ARCH >= 800
-#    define DO_JM_UNROLL 1
-#    if !defined CALC_ENERGIES && !defined PRUNE_NBL
-#        if (defined EL_CUTOFF || defined EL_RF                                            \
-             || defined EL_EWALD_ANY && !defined LJ_FORCE_SWITCH && !defined LJ_POT_SWITCH \
-                        && (!defined LJ_COMB_LB || GMX_PTX_ARCH == 800))
     static constexpr int jmLoopUnrollFactor = 4;
-#        else
-    static constexpr int jmLoopUnrollFactor = 2;
-#        endif
-#    else // CALC_ENERGIES
-#        if (defined EL_CUTOFF || defined EL_RF && !defined LJ_FORCE_SWITCH && !defined LJ_POT_SWITCH)
-    static constexpr int jmLoopUnrollFactor = 2;
-#        else
-    static constexpr int jmLoopUnrollFactor = 1;
-#        endif
-#    endif
-#else
-#    define DO_JM_UNROLL 0
-#endif
-
     /*********************************************************************
      * Set up shared memory pointers.
      * sm_nextSlotPtr should always be updated to point to the "next slot",

@@ -396,7 +396,7 @@ static __forceinline__ __device__ void fetch_nbfp_c6_c12(float& c6, float& c12, 
 #    if DISABLE_CUDA_TEXTURES
     c6c12 = LDG(&nbparam.nbfp[baseIndex]);
 #    else
-    c6c12 = tex1Dfetch<float2>(nbparam.nbfp_texobj, baseIndex);
+    c6c12 = tex1Dfetch<float2>(nbparam.nbfp_texobj, baseIndex); // TODO: shared memory, 
 #    endif // DISABLE_CUDA_TEXTURES
     c6  = c6c12.x;
     c12 = c6c12.y;
@@ -618,7 +618,7 @@ static __forceinline__ __device__ void reduce_force_i_warp_shfl(float3          
     /* Threads 0,1,2 and 4,5,6 increment x,y,z for their warp */
     if ((tidxj & 3) < 3)
     {
-        atomicAdd(&fout[aidx].x + (tidxj & 3), fin.x);
+        atomicAdd(&fout[aidx].x + (tidxj & 3), fin.x); // unsafe atomic add
 
         if (bCalcFshift)
         {
