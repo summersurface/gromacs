@@ -75,8 +75,8 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
     // - sm_75: improvements +/- very small
     // - sm_61: tested and slower without preload
     // - sm_6x and earlier not tested to
-    constexpr bool c_preloadCj = (GMX_PTX_ARCH < 700 || GMX_PTX_ARCH == 750);
-
+    // constexpr bool c_preloadCj = (GMX_PTX_ARCH < 700 || GMX_PTX_ARCH == 750);
+    // constexpr bool c_preloadCj = true;
 
     // Full or partial unroll on Ampere (and later) GPUs is beneficial given the increased L1
     // instruction cache. Tested with CUDA 11-12.
@@ -97,13 +97,13 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
     sm_nextSlotPtr += (c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(*xqib));
 
     /* shmem buffer for cj, for each warp separately */
-    int* cjs = reinterpret_cast<int*>(sm_nextSlotPtr);
-    if (c_preloadCj)
-    {
-        /* the cjs buffer's use expects a base pointer offset for pairs of warps in the j-concurrent execution */
-        cjs += tidxz * c_nbnxnGpuClusterpairSplit * c_nbnxnGpuJgroupSize;
-        sm_nextSlotPtr += (NTHREAD_Z * c_nbnxnGpuClusterpairSplit * c_nbnxnGpuJgroupSize * sizeof(*cjs));
-    }
+    // int* cjs = reinterpret_cast<int*>(sm_nextSlotPtr);
+    // if (c_preloadCj)
+    // {
+    //     /* the cjs buffer's use expects a base pointer offset for pairs of warps in the j-concurrent execution */
+    //     cjs += tidxz * c_nbnxnGpuClusterpairSplit * c_nbnxnGpuJgroupSize;
+    //     sm_nextSlotPtr += (NTHREAD_Z * c_nbnxnGpuClusterpairSplit * c_nbnxnGpuJgroupSize * sizeof(*cjs));
+    // }
 
     /* shmem buffer for i atom-type pre-loading */
     int* atib = reinterpret_cast<int*>(sm_nextSlotPtr);
@@ -156,16 +156,16 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
 
         if (imask)
         {
-            if (c_preloadCj)
-            {
-                /* Pre-load cj into shared memory on both warps separately */
-                if ((tidxj == 0 | tidxj == 4) & (tidxi < c_nbnxnGpuJgroupSize))
-                {
-                    cjs[tidxi + tidxj * c_nbnxnGpuJgroupSize / c_splitClSize] =
-                            pl_cjPacked[jPacked].cj[tidxi];
-                }
-                __syncwarp(c_fullWarpMask);
-            }
+            // if (c_preloadCj)
+            // {
+            //     /* Pre-load cj into shared memory on both warps separately */
+            //     if ((tidxj == 0 | tidxj == 4) & (tidxi < c_nbnxnGpuJgroupSize))
+            //     {
+            //         cjs[tidxi + tidxj * c_nbnxnGpuJgroupSize / c_splitClSize] =
+            //                 pl_cjPacked[jPacked].cj[tidxi];
+            //     }
+            //     __syncwarp(c_fullWarpMask);
+            // }
 
 #    pragma unroll jmLoopUnrollFactor
             for (jm = 0; jm < c_nbnxnGpuJgroupSize; jm++)
@@ -174,8 +174,8 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
                 {
                     mask_ji = (1U << (jm * c_nbnxnGpuNumClusterPerSupercluster));
 
-                    cj = c_preloadCj ? cjs[jm + (tidxj & 4) * c_nbnxnGpuJgroupSize / c_splitClSize]
-                                     : cj = pl_cjPacked[jPacked].cj[jm];
+                    cj = /*c_preloadCj ? cjs[jm + (tidxj & 4) * c_nbnxnGpuJgroupSize / c_splitClSize]
+                                     : cj =*/ pl_cjPacked[jPacked].cj[jm];
 
                     aj = cj * c_clSize + tidxj;
 
@@ -251,11 +251,11 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
                 }
             }
         }
-        if (c_preloadCj)
-        {
-            // avoid shared memory WAR hazards on sm_cjs between loop iterations
-            __syncwarp(c_fullWarpMask);
-        }
+        // if (c_preloadCj)
+        // {
+        //     // avoid shared memory WAR hazards on sm_cjs between loop iterations
+        //     __syncwarp(c_fullWarpMask);
+        // }
     }
 
     /* skip central shifts when summing shift forces */

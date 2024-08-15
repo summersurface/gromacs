@@ -433,8 +433,8 @@ gmx_c_flags()
 # EXTRA_COMPILER_FLAGS so that we we don't perpetrate bugs where
 # things that work in C compilation (e.g. merging from old branches)
 # might not also work for C++ compilation.
-set(EXTRA_C_FLAGS "")
-set(EXTRA_CXX_FLAGS "")
+set(EXTRA_C_FLAGS "-g")
+set(EXTRA_CXX_FLAGS "-g")
 
 # Run through a number of tests for buggy compilers and other issues
 include(gmxTestCompilerProblems)
