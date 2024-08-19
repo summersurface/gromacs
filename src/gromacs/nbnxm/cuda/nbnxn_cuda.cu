@@ -24,10 +24,15 @@
 #include "nbnxm_cuda_types.h"
 
 #define NTHREAD_Z (1)
-#define MIN_BLOCKS_PER_MP (16)
+// #define MIN_BLOCKS_PER_MP (16)
 #define THREADS_PER_BLOCK (c_clSize * c_clSize * NTHREAD_Z)
+// #define MIN_BLOCKS_PER_MP (GMX_CUDA_MAX_THREADS_PER_MP / THREADS_PER_BLOCK)
+#define MIN_BLOCKS_PER_MP (16)
+#define PARALLEL_NSCI (4)
+#define NTHREADS (THREADS_PER_BLOCK * PARALLEL_NSCI)
+#define BLOCKS_PER_MP (MIN_BLOCKS_PER_MP / PARALLEL_NSCI)
 
-__launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_cuda_test_kernel
+__launch_bounds__(NTHREADS) __global__ void nbnxn_F_cuda_test_kernel
                 (NBAtomDataGpu atdat, NBParamGpu nbparam, Nbnxm::gpu_plist plist, bool bCalcFshift)
 
 {
@@ -80,7 +85,7 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
 
     // Full or partial unroll on Ampere (and later) GPUs is beneficial given the increased L1
     // instruction cache. Tested with CUDA 11-12.
-    static constexpr int jmLoopUnrollFactor = 4;
+    static constexpr int jmLoopUnrollFactor = 2;
     /*********************************************************************
      * Set up shared memory pointers.
      * sm_nextSlotPtr should always be updated to point to the "next slot",
@@ -94,7 +99,7 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
 
     /* shmem buffer for i x+q pre-loading */
     float4* xqib = reinterpret_cast<float4*>(sm_nextSlotPtr);
-    sm_nextSlotPtr += (c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(*xqib));
+    sm_nextSlotPtr += (c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(*xqib) * PARALLEL_NSCI);
 
     /* shmem buffer for cj, for each warp separately */
     // int* cjs = reinterpret_cast<int*>(sm_nextSlotPtr);
@@ -107,10 +112,20 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
 
     /* shmem buffer for i atom-type pre-loading */
     int* atib = reinterpret_cast<int*>(sm_nextSlotPtr);
-    sm_nextSlotPtr += (c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(*atib));
-    /*********************************************************************/
+    sm_nextSlotPtr += (c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(*atib) * PARALLEL_NSCI);
 
-    nb_sci         = pl_sci[bidx];         /* my i super-cluster's index = current bidx */
+    /* shmem buffer for c6 c12 pre-loading*/
+    // float2* c6c12_list = reinterpret_cast<float2*>(sm_nextSlotPtr);
+    // sm_nextSlotPtr += (ntypes * ntypes * sizeof(*c6c12_list));
+
+    /*********************************************************************/
+    // if (bidx * PARALLEL_NSCI + threadIdx.z >= plist.nsci)
+    // {
+    //     return;
+    // }
+
+
+    nb_sci = pl_sci[bidx * PARALLEL_NSCI + threadIdx.z]; /* my i super-cluster's index = current bidx */
     sci            = nb_sci.sci;           /* super-cluster */
     cijPackedBegin = nb_sci.cjPackedBegin; /* first ...*/
     cijPackedEnd   = nb_sci.cjPackedEnd;   /* and last index of j clusters */
@@ -127,11 +142,23 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
         const float* shiftptr = reinterpret_cast<const float*>(&shift_vec[nb_sci.shift]);
         xqbuf = xq[ai] + make_float4(LDG(shiftptr), LDG(shiftptr + 1), LDG(shiftptr + 2), 0.0F);
         xqbuf.w *= nbparam.epsfac;
-        xqib[tidxj * c_clSize + tidxi] = xqbuf;
+        xqib[threadIdx.z * c_clSize * c_clSize + tidxj * c_clSize + tidxi] = xqbuf; //need num of parallel nsci
 
         /* Pre-load the i-atom types into shared memory */
-        atib[tidxj * c_clSize + tidxi] = atom_types[ai];
+        atib[threadIdx.z * c_clSize * c_clSize + tidxj * c_clSize + tidxi] =
+                atom_types[ai]; // need num of parallel nsci
     }
+    
+    /* Pre-load the c6 and c12 parameters into shared memory */
+    // int total = ntypes * ntypes;
+    // for (i = 0; i < total; i += blockDim.x * blockDim.y * blockDim.z)
+    // {
+    //     if (i + threadIdx.z * blockDim.x * blockDim.y + tidx >= total)
+    //     {
+    //         break;
+    //     }
+    //     c6c12_list[i + threadIdx.z * blockDim.x * blockDim.y + tidx] = nbparam.nbfp[i + threadIdx.z * blockDim.x * blockDim.y + tidx];
+    // }
 
     __syncthreads();
 
@@ -195,7 +222,7 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
                             ci = sci * c_nbnxnGpuNumClusterPerSupercluster + i; /* i cluster index */
 
                             /* all threads load an atom from i cluster ci into shmem! */
-                            xqbuf = xqib[i * c_clSize + tidxi];
+                            xqbuf = xqib[threadIdx.z * c_clSize * c_nbnxnGpuNumClusterPerSupercluster + i * c_clSize + tidxi];
                             xi    = make_float3(xqbuf.x, xqbuf.y, xqbuf.z);
 
                             /* distance between i and j atoms */
@@ -211,7 +238,9 @@ __launch_bounds__(THREADS_PER_BLOCK, MIN_BLOCKS_PER_MP) __global__ void nbnxn_F_
                                 qi = xqbuf.w;
 
                                 /* LJ 6*C6 and 12*C12 */
-                                typei = atib[i * c_clSize + tidxi];
+                                typei = atib[threadIdx.z * c_clSize * c_nbnxnGpuNumClusterPerSupercluster + i * c_clSize + tidxi];
+                                // c6 = c6c12_list[ntypes * typei + typej].x;
+                                // c12 = c6c12_list[ntypes * typei + typej].y;
                                 fetch_nbfp_c6_c12(c6, c12, nbparam, ntypes * typei + typej);
 
                                 // Ensure distance do not become so small that r^-12 overflows

@@ -149,6 +149,10 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
     {
         case GpuApiCallBehavior::Async:
             GMX_ASSERT(isHostMemoryPinned(hostBuffer), "Source host buffer was not pinned for CUDA");
+            // stat = cudaGetLastError();
+            // GMX_RELEASE_ASSERT(
+            //         stat == cudaSuccess,
+            //         ("Before Asynchronous H2D copy failed. " + gmx::getDeviceErrorString(stat)).c_str());
             stat = cudaMemcpyAsync(*reinterpret_cast<ValueType**>(buffer) + startingOffset,
                                    hostBuffer,
                                    bytes,

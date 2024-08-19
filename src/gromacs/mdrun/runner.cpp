@@ -127,6 +127,7 @@
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/locality.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
@@ -137,6 +138,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
 #include "gromacs/modularsimulator/modularsimulator.h"
+#include "gromacs/nbnxm/cuda/nbnxm_cuda_types.h"
 #include "gromacs/nbnxm/gpu_data_mgmt.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/pairlist_tuning.h"
@@ -2306,6 +2308,8 @@ int Mdrunner::mdrunner()
 
             // build and run simulator object based on user-input
             auto simulator = simulatorBuilder.build(useModularSimulator);
+            // NbnxmGpu* gpunb     = fr->nbv->releaseGpuNbv();
+            // printf("plist->nsci = %d\n", gpunb->plist[InteractionLocality::Local]->nsci); //-1
             simulator->run();
 
             if (fr->pmePpCommGpu)

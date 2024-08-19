@@ -127,14 +127,16 @@
  *
  * Note: convenience macros, need to be undef-ed at the end of the file.
  */
+#define THREADS_PER_BLOCK (c_clSize * c_clSize * NTHREAD_Z)
+
 #if GMX_PTX_ARCH == 370
 #    define NTHREAD_Z (2)
 #    define MIN_BLOCKS_PER_MP (16)
 #else
 #    define NTHREAD_Z (1)
+// #    define MIN_BLOCKS_PER_MP (GMX_CUDA_MAX_THREADS_PER_MP / THREADS_PER_BLOCK)
 #    define MIN_BLOCKS_PER_MP (16)
 #endif /* GMX_PTX_ARCH == 370 */
-#define THREADS_PER_BLOCK (c_clSize * c_clSize * NTHREAD_Z)
 
 #if GMX_PTX_ARCH >= 350
 /**@}*/

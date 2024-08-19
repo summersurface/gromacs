@@ -402,6 +402,15 @@ static __forceinline__ __device__ void fetch_nbfp_c6_c12(float& c6, float& c12, 
     c12 = c6c12.y;
 }
 
+static __forceinline__ __device__ void fetch_nbfp_c6c12(float2& c6c12, const NBParamGpu nbparam, int baseIndex)
+{
+#    if DISABLE_CUDA_TEXTURES
+    c6c12 = LDG(&nbparam.nbfp[baseIndex]);
+#    else
+    c6c12 = tex1Dfetch<float2>(nbparam.nbfp_texobj, baseIndex); // TODO: shared memory,
+#    endif // DISABLE_CUDA_TEXTURES
+}
+
 
 /*! Calculate analytical Ewald correction term. */
 static __forceinline__ __device__ float pmecorrF(float z2)

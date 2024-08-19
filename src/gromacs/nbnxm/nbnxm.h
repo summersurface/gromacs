@@ -490,6 +490,8 @@ public:
     //! Returns a pointer to the NbnxmGpu object, can return nullptr
     NbnxmGpu* gpuNbv() { return gpuNbv_; }
 
+    NbnxmGpu* releaseGpuNbv() { return gpuNbv_; }
+
 private:
     //! All data related to the pair lists
     std::unique_ptr<PairlistSets> pairlistSets_;

@@ -96,6 +96,7 @@
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
+#include "gromacs/nbnxm/cuda/nbnxm_cuda_types.h"
 #include "gromacs/nbnxm/gpu_data_mgmt.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
@@ -1497,6 +1498,7 @@ void do_force(FILE*                               fplog,
     if (stepWork.doNeighborSearch)
     {
         doPairSearch(cr, inputrec, mdModulesNotifiers, step, nrnb, wcycle, *top, box, x, v, *mdatoms, fr, runScheduleWork);
+        // printf("plist->nsci=%d\n", nbv->releaseGpuNbv()->plist[InteractionLocality::Local]->nsci);
 
         /* At a search step we need to start the first balancing region
          * somewhere early inside the step after communication during domain

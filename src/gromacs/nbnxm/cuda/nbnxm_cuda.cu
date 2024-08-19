@@ -388,9 +388,11 @@ static inline nbnxn_cu_kfunc_ptr_t select_nbnxn_kernel(enum ElecType           e
         }
         else
         {
-            if (elecTypeIdx == 4 && vdwTypeIdx == 3)
+            if (elecTypeIdx == 4 && vdwTypeIdx == 3){
+                // printf("Using nbnxn_F_cuda_test_kernel\n");
                 return nbnxn_F_cuda_test_kernel;
-             return nb_kfunc_noener_noprune_ptr[elecTypeIdx][vdwTypeIdx];
+            }
+              return nb_kfunc_noener_noprune_ptr[elecTypeIdx][vdwTypeIdx];
         }
     }
 }
@@ -407,19 +409,19 @@ static inline int calc_shmem_required_nonbonded(const int               num_thre
     /* size of shmem (force-buffers/xq/atom type preloading) */
     /* NOTE: with the default kernel on sm3.0 we need shmem only for pre-loading */
     /* i-atom x+q in shared memory */
-    shmem = c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(float4);
+    shmem = c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(float4) * num_threads_z;
     /* cj in shared memory, for each warp separately */
-    shmem += num_threads_z * c_nbnxnGpuClusterpairSplit * c_nbnxnGpuJgroupSize * sizeof(int);
+    // shmem += num_threads_z * c_nbnxnGpuClusterpairSplit * c_nbnxnGpuJgroupSize * sizeof(int);
 
     if (nbp->vdwType == VdwType::CutCombGeom || nbp->vdwType == VdwType::CutCombLB)
     {
         /* i-atom LJ combination parameters in shared memory */
-        shmem += c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(float2);
+        shmem += c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(float2) * num_threads_z;
     }
     else
     {
         /* i-atom types in shared memory */
-        shmem += c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(int);
+        shmem += c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(int) * num_threads_z;
     }
     /* for reducing prunedPairListCount over all warps in the block, to be used in plist sorting */
     shmem += 1 * sizeof(int);
@@ -538,13 +540,36 @@ void gpu_launch_kernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const In
 
 
     KernelLaunchConfig config;
-    config.blockSize[0] = c_clSize;
-    config.blockSize[1] = c_clSize;
-    config.blockSize[2] = num_threads_z;
-    config.gridSize[0]  = nblock;
-    config.sharedMemorySize =
-            calc_shmem_required_nonbonded(num_threads_z, &nb->deviceContext_->deviceInfo(), nbp);
 
+    auto* timingEvent = bDoTime ? timers->interaction[iloc].nb_k.fetchNextEvent() : nullptr;
+
+    /* Whether we need to call a combined prune and interaction kernel or just an interaction
+     * kernel. bDoPrune being true implies we are not using dynamic pruning and are in the first
+     * call to the interaction kernel after a neighbour list step */
+    bool       bDoPrune = (plist->haveFreshList && !nb->timers->interaction[iloc].didPrune);
+    const auto kernel   = select_nbnxn_kernel(
+            nbp->elecType, nbp->vdwType, stepWork.computeEnergy, bDoPrune, &nb->deviceContext_->deviceInfo());
+    if (kernel == nbnxn_F_cuda_test_kernel)
+    {
+        int parallel_nsci = 4;
+        config.blockSize[0] = c_clSize;
+        config.blockSize[1] = c_clSize;
+        config.blockSize[2] = parallel_nsci;
+        config.gridSize[0]  = (nblock + parallel_nsci - 1) / parallel_nsci;
+        config.sharedMemorySize =
+                calc_shmem_required_nonbonded(parallel_nsci, &nb->deviceContext_->deviceInfo(), nbp);
+                // + adat->numTypes * adat->numTypes * 2 * sizeof(float);
+        // printf("Shared memory size: %d\n", config.sharedMemorySize);
+    } else {
+        config.blockSize[2]     = num_threads_z;
+        config.blockSize[0]     = c_clSize;
+        config.blockSize[1]     = c_clSize;
+        config.gridSize[0]      = nblock;
+        config.sharedMemorySize = calc_shmem_required_nonbonded(
+                num_threads_z,
+                &nb->deviceContext_->deviceInfo(),
+                nbp); // + adat->numTypes * adat->numTypes * 2 * sizeof(float);
+    }
     if (debug)
     {
         fprintf(debug,
@@ -562,14 +587,6 @@ void gpu_launch_kernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const In
                 config.sharedMemorySize);
     }
 
-    auto* timingEvent = bDoTime ? timers->interaction[iloc].nb_k.fetchNextEvent() : nullptr;
-
-    /* Whether we need to call a combined prune and interaction kernel or just an interaction
-     * kernel. bDoPrune being true implies we are not using dynamic pruning and are in the first
-     * call to the interaction kernel after a neighbour list step */
-    bool       bDoPrune = (plist->haveFreshList && !nb->timers->interaction[iloc].didPrune);
-    const auto kernel   = select_nbnxn_kernel(
-            nbp->elecType, nbp->vdwType, stepWork.computeEnergy, bDoPrune, &nb->deviceContext_->deviceInfo());
     const auto kernelArgs =
             prepareGpuKernelArguments(kernel, config, adat, nbp, plist, &stepWork.computeVirial);
     launchGpuKernel(kernel, config, deviceStream, timingEvent, "k_calc_nb", kernelArgs);
